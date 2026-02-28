@@ -5,6 +5,7 @@ import {
   type TextContent,
 } from "@mariozechner/pi-ai";
 import { DoubaoWebClientBrowser, type DoubaoWebClientOptions } from "../providers/doubao-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 export function createDoubaoWebStreamFn(authOrJson: string): StreamFn {
   let options: DoubaoWebClientOptions;
@@ -24,9 +25,8 @@ export function createDoubaoWebStreamFn(authOrJson: string): StreamFn {
         await client.init();
 
         const messages = context.messages || [];
-        const doubaoMessages = messages.map((m) => ({
-          role: m.role as string,
-          content:
+        const doubaoMessages = messages.map((m) => {
+          let content =
             typeof m.content === "string"
               ? m.content
               : Array.isArray(m.content)
@@ -34,8 +34,12 @@ export function createDoubaoWebStreamFn(authOrJson: string): StreamFn {
                     .filter((p) => p.type === "text")
                     .map((p) => (p as TextContent).text)
                     .join("")
-                : "",
-        }));
+                : "";
+          if ((m.role as string) === "user" && content) {
+            content = stripForWebProvider(content) || content;
+          }
+          return { role: m.role as string, content };
+        });
 
         const modelId = model.id.includes("/") ? model.id.split("/")[1] : model.id;
 

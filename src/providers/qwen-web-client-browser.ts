@@ -149,12 +149,17 @@ export class QwenWebClientBrowser {
     console.log(`[Qwen Web Browser] Model: ${model}`);
     console.log(`[Qwen Web Browser] Message: ${params.message.substring(0, 100)}...`);
 
-    // Step 1: Create a new chat session to get chat_id
+    // Step 1: Create a new chat session to get chat_id（30s 超时）
+    const createChatTimeoutMs = 30_000;
     const createChatResult = await page.evaluate(
-      async ({ baseUrl }) => {
+      async ({ baseUrl, timeoutMs }) => {
+        let timer: ReturnType<typeof setTimeout>;
         try {
           const url = `${baseUrl}/api/v2/chats/new`;
           console.log(`[Browser] Creating chat: ${url}`);
+          
+          const controller = new AbortController();
+          timer = setTimeout(() => controller.abort(), timeoutMs);
           
           const res = await fetch(url, {
             method: "POST",
@@ -162,7 +167,10 @@ export class QwenWebClientBrowser {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({}),
+            signal: controller.signal,
           });
+          
+          clearTimeout(timer);
 
           console.log(`[Browser] Create chat response status: ${res.status}`);
           console.log(`[Browser] Create chat response headers:`, Object.fromEntries(res.headers.entries()));
@@ -178,11 +186,16 @@ export class QwenWebClientBrowser {
           console.log(`[Browser] Chat created, chat ID:`, chatId);
           return { ok: true, chatId, fullData: data };
         } catch (err) {
+          if (typeof timer !== "undefined") clearTimeout(timer);
+          const msg = String(err);
+          if (msg.includes("aborted") || msg.includes("signal")) {
+            return { ok: false, status: 408, error: `Create chat timed out after ${timeoutMs}ms` };
+          }
           console.error(`[Browser] Create chat exception:`, err);
-          return { ok: false, status: 500, error: String(err) };
+          return { ok: false, status: 500, error: msg };
         }
       },
-      { baseUrl: this.baseUrl },
+      { baseUrl: this.baseUrl, timeoutMs: createChatTimeoutMs },
     );
 
     console.log(`[Qwen Web Browser] Create chat result:`, JSON.stringify(createChatResult));
@@ -197,14 +210,18 @@ export class QwenWebClientBrowser {
     const chatId = createChatResult.chatId;
     console.log(`[Qwen Web Browser] Chat ID: ${chatId}`);
 
-    // Step 2: Send message using the chat_id
+    // Step 2: Send message using the chat_id（加入 fetch 超时，默认 5 分钟，避免长时间无响应导致 run 级 timeout）
+    const fetchTimeoutMs = 300_000;
+    const fid = crypto.randomUUID();
     const responseData = await page.evaluate(
-      async ({ baseUrl, chatId, model, message }) => {
+      async ({ baseUrl, chatId, model, message, fid, timeoutMs }) => {
+        let timer: ReturnType<typeof setTimeout>;
         try {
           const url = `${baseUrl}/api/v2/chat/completions?chat_id=${chatId}`;
-          console.log(`[Browser] Sending message: ${url}`);
+          console.log(`[Browser] Sending message: ${url} (timeout: ${timeoutMs}ms)`);
           
-          const fid = crypto.randomUUID();
+          const controller = new AbortController();
+          timer = setTimeout(() => controller.abort(), timeoutMs);
           const requestBody = {
             stream: true,
             version: "2.1",
@@ -239,8 +256,10 @@ export class QwenWebClientBrowser {
               "Accept": "text/event-stream",
             },
             body: JSON.stringify(requestBody),
+            signal: controller.signal,
           });
 
+          clearTimeout(timer);
           console.log(`[Browser] Response status: ${res.status}`);
           console.log(`[Browser] Response headers:`, Object.fromEntries(res.headers.entries()));
 
@@ -273,11 +292,16 @@ export class QwenWebClientBrowser {
           console.log(`[Browser] Total chunks: ${chunkCount}, Total length: ${fullText.length}`);
           return { ok: true, data: fullText };
         } catch (err) {
+          if (typeof timer !== "undefined") clearTimeout(timer);
+          const msg = String(err);
+          if (msg.includes("aborted") || msg.includes("signal")) {
+            return { ok: false, status: 408, error: `Qwen API request timed out after ${timeoutMs}ms` };
+          }
           console.error(`[Browser] Fetch error:`, err);
-          return { ok: false, status: 500, error: String(err) };
+          return { ok: false, status: 500, error: msg };
         }
       },
-      { baseUrl: this.baseUrl, chatId, model: model, message: params.message },
+      { baseUrl: this.baseUrl, chatId, model: model, message: params.message, fid, timeoutMs: fetchTimeoutMs },
     );
 
     if (!responseData || !responseData.ok) {
@@ -289,7 +313,13 @@ export class QwenWebClientBrowser {
           "Authentication failed. Please re-run onboarding to refresh your Qwen session."
         );
       }
-      throw new Error(`Qwen API error: ${responseData?.status || 'unknown'} - ${responseData?.error || 'Request failed'}`);
+      if (responseData?.status === 408) {
+        throw new Error(
+          `Qwen API request timed out. ${responseData?.error || ""} ` +
+            "Ensure chat.qwen.ai is reachable, Chrome is connected, and you are logged in."
+        );
+      }
+      throw new Error(`Qwen API error: ${responseData?.status || "unknown"} - ${responseData?.error || "Request failed"}`);
     }
 
     console.log(`[Qwen Web Browser] Response data length: ${responseData.data?.length || 0} bytes`);

@@ -8,6 +8,7 @@ import {
   ManusWebClientBrowser,
   type ManusWebClientOptions,
 } from "../providers/manus-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 const conversationMap = new Map<string, string>();
 
@@ -50,13 +51,18 @@ export function createManusWebStreamFn(cookieOrJson: string): StreamFn {
           throw new Error("No message found to send to Manus API");
         }
 
+        const cleanPrompt = stripForWebProvider(prompt);
+        if (!cleanPrompt) {
+          throw new Error("No message content to send after stripping metadata blocks");
+        }
+
         console.log(`[ManusWebStream] Starting run for session: ${sessionKey}`);
         console.log(`[ManusWebStream] Conversation ID: ${conversationId || "new"}`);
-        console.log(`[ManusWebStream] Prompt length: ${prompt.length}`);
+        console.log(`[ManusWebStream] Prompt length: ${prompt.length} -> ${cleanPrompt.length} after stripping metadata`);
 
         const responseStream = await client.chatCompletions({
           conversationId,
-          message: prompt,
+          message: cleanPrompt,
           model: model.id,
           signal: streamOptions?.signal,
         });

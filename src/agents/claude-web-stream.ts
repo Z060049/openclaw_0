@@ -5,6 +5,7 @@ import {
   type TextContent,
 } from "@mariozechner/pi-ai";
 import { ClaudeWebClientBrowser, type ClaudeWebClientOptions } from "../providers/claude-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 export function createClaudeWebStreamFn(authOrJson: string): StreamFn {
   let options: ClaudeWebClientOptions;
@@ -42,8 +43,13 @@ export function createClaudeWebStreamFn(authOrJson: string): StreamFn {
           throw new Error("No message found to send to Claude");
         }
 
+        const cleanPrompt = stripForWebProvider(prompt);
+        if (!cleanPrompt) {
+          throw new Error("No message content to send after stripping metadata");
+        }
+
         const responseStream = await client.chatCompletions({
-          message: prompt,
+          message: cleanPrompt,
           model: model.id,
           signal: streamOptions?.signal,
         });

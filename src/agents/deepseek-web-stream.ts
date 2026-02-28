@@ -12,6 +12,7 @@ import {
   DeepSeekWebClient,
   type DeepSeekWebClientOptions,
 } from "../providers/deepseek-web-client.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 // Keep track of session IDs per session key to avoid creating too many web chat sessions
 const sessionMap = new Map<string, string>();
@@ -138,6 +139,10 @@ export function createDeepseekWebStreamFn(cookieOrJson: string): StreamFn {
               content = String(m.content);
             }
 
+            if ((m.role as string) === "user" && content) {
+              content = stripForWebProvider(content) || content;
+            }
+
             console.log(
               `[DeepseekWebStream] Message[${messages.indexOf(m)}] role=${m.role} length=${content.length} preview=${content.slice(0, 50).replace(/\n/g, " ")}`,
             );
@@ -164,12 +169,13 @@ export function createDeepseekWebStreamFn(cookieOrJson: string): StreamFn {
             const lastUserMessage = [...messages].toReversed().find((m) => m.role === "user");
             if (lastUserMessage) {
               if (typeof lastUserMessage.content === "string") {
-                prompt = lastUserMessage.content;
+                prompt = stripForWebProvider(lastUserMessage.content) || lastUserMessage.content;
               } else if (Array.isArray(lastUserMessage.content)) {
-                prompt = (lastUserMessage.content as MessageContentPart[])
+                const raw = (lastUserMessage.content as MessageContentPart[])
                   .filter((part) => part.type === "text")
                   .map((part) => (part as TextContent).text)
                   .join("");
+                prompt = stripForWebProvider(raw) || raw;
               }
             }
           }

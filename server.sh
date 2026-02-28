@@ -54,32 +54,51 @@ start_gateway() {
   GATEWAY_PID=$!
   echo "$GATEWAY_PID" > "$PID_FILE"
 
-  sleep 2
+  echo "等待 Gateway 就绪..."
+  WEBUI_READY=0
+  i=0
+  while [ $i -lt 30 ]; do
+    i=$((i + 1))
+    if curl -s -o /dev/null --connect-timeout 1 "http://127.0.0.1:$PORT/" 2>/dev/null; then
+      echo "Gateway 已就绪 (${i}s)"
+      WEBUI_READY=1
+      break
+    fi
+    if ! kill -0 $GATEWAY_PID 2>/dev/null; then
+      echo "Gateway 进程已退出，启动失败"
+      cat /tmp/openclaw-gateway.log
+      rm -f "$PID_FILE"
+      exit 1
+    fi
+    sleep 1
+  done
 
   if kill -0 $GATEWAY_PID 2>/dev/null; then
+    if [ "$WEBUI_READY" -eq 0 ]; then
+      echo "⚠ curl 检测未成功，Gateway 可能尚未就绪，请稍后手动打开 Web UI"
+    fi
     WEBUI_URL="http://127.0.0.1:$PORT/#token=62b791625fa441be036acd3c206b7e14e2bb13c803355823"
     echo "Gateway 服务已启动 (PID: $GATEWAY_PID)"
     echo "Web UI: $WEBUI_URL"
-    
-    # 跨平台打开浏览器
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      # macOS
-      echo "正在打开浏览器..."
-      open "$WEBUI_URL"
-    elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$OSTYPE" == "linux"* ]]; then
-      # Linux
-      if command -v xdg-open >/dev/null 2>&1; then
+    if [ "$WEBUI_READY" -eq 1 ]; then
+      if [[ "$OSTYPE" == "darwin"* ]]; then
         echo "正在打开浏览器..."
-        xdg-open "$WEBUI_URL" 2>/dev/null
+        open "$WEBUI_URL"
+      elif [[ "$OSTYPE" == "linux-gnu"* ]] || [[ "$OSTYPE" == "linux"* ]]; then
+        if command -v xdg-open >/dev/null 2>&1; then
+          echo "正在打开浏览器..."
+          xdg-open "$WEBUI_URL" 2>/dev/null
+        else
+          echo "请手动在浏览器中打开上述地址"
+        fi
+      elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
+        echo "正在打开浏览器..."
+        start "$WEBUI_URL"
       else
-        echo "提示：请手动打开浏览器访问 Web UI"
+        echo "请手动在浏览器中打开上述地址"
       fi
-    elif [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "cygwin" ]]; then
-      # Windows (Git Bash / Cygwin)
-      echo "正在打开浏览器..."
-      start "$WEBUI_URL"
     else
-      echo "提示：请手动打开浏览器访问 Web UI"
+      echo "请手动在浏览器中打开上述地址"
     fi
   else
     echo "Gateway 服务启动失败，请查看日志:"

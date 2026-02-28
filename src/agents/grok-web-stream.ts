@@ -8,6 +8,7 @@ import {
   GrokWebClientBrowser,
   type GrokWebClientOptions,
 } from "../providers/grok-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 const conversationMap = new Map<string, string>();
 const parentResponseMap = new Map<string, string>();
@@ -51,16 +52,21 @@ export function createGrokWebStreamFn(cookieOrJson: string): StreamFn {
           throw new Error("No message found to send to Grok API");
         }
 
+        const cleanPrompt = stripForWebProvider(prompt);
+        if (!cleanPrompt) {
+          throw new Error("No message content to send after stripping metadata");
+        }
+
         const parentResponseId = parentResponseMap.get(sessionKey);
 
         console.log(`[GrokWebStream] Starting run for session: ${sessionKey}`);
         console.log(`[GrokWebStream] Conversation ID: ${conversationId || "new"}`);
-        console.log(`[GrokWebStream] Prompt length: ${prompt.length}`);
+        console.log(`[GrokWebStream] Prompt length: ${prompt.length} -> ${cleanPrompt.length} after stripping`);
 
         const responseStream = await client.chatCompletions({
           conversationId,
           parentResponseId,
-          message: prompt,
+          message: cleanPrompt,
           model: model.id,
           signal: streamOptions?.signal,
         });

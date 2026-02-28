@@ -8,6 +8,7 @@ import {
   ChatGPTWebClientBrowser,
   type ChatGPTWebClientOptions,
 } from "../providers/chatgpt-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 const conversationMap = new Map<string, string>();
 const parentMessageMap = new Map<string, string>();
@@ -56,14 +57,19 @@ export function createChatGPTWebStreamFn(cookieOrJson: string): StreamFn {
           throw new Error("No message found to send to ChatGPT API");
         }
 
+        const cleanPrompt = stripForWebProvider(prompt);
+        if (!cleanPrompt) {
+          throw new Error("No message content to send after stripping metadata");
+        }
+
         console.log(`[ChatGPTWebStream] Starting run for session: ${sessionKey}`);
         console.log(`[ChatGPTWebStream] Conversation ID: ${conversationId || "new"}`);
-        console.log(`[ChatGPTWebStream] Prompt length: ${prompt.length}`);
+        console.log(`[ChatGPTWebStream] Prompt length: ${prompt.length} -> ${cleanPrompt.length} after stripping`);
 
         const responseStream = await client.chatCompletions({
           conversationId: conversationId || "new",
           parentMessageId,
-          message: prompt,
+          message: cleanPrompt,
           model: model.id,
           signal: options?.signal,
         });

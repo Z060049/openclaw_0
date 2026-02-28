@@ -8,6 +8,7 @@ import {
   KimiWebClientBrowser,
   type KimiWebClientOptions,
 } from "../providers/kimi-web-client-browser.js";
+import { stripForWebProvider } from "./prompt-sanitize.js";
 
 const conversationMap = new Map<string, string>();
 
@@ -50,13 +51,18 @@ export function createKimiWebStreamFn(cookieOrJson: string): StreamFn {
           throw new Error("No message found to send to Kimi API");
         }
 
+        const cleanPrompt = stripForWebProvider(prompt);
+        if (!cleanPrompt) {
+          throw new Error("No message content to send after stripping metadata");
+        }
+
         console.log(`[KimiWebStream] Starting run for session: ${sessionKey}`);
         console.log(`[KimiWebStream] Conversation ID: ${conversationId || "new"}`);
-        console.log(`[KimiWebStream] Prompt length: ${prompt.length}`);
+        console.log(`[KimiWebStream] Prompt length: ${prompt.length} -> ${cleanPrompt.length} after stripping`);
 
         const responseStream = await client.chatCompletions({
           conversationId,
-          message: prompt,
+          message: cleanPrompt,
           model: model.id,
           signal: streamOptions?.signal,
         });
