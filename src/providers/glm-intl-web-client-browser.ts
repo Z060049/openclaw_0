@@ -278,336 +278,106 @@ export class GlmIntlWebClientBrowser {
     if (!this.page) {
       throw new Error("GlmIntlWebClientBrowser not initialized");
     }
+    const page = this.page;
+    const model = params.model;
+    console.log(`[GLM Intl Web Browser] UI mode send... model=${model}`);
 
-    if (!this.accessToken) {
-      await this.refreshAccessToken();
+    // Ensure we're on chat.z.ai and the composer is visible.
+    if (!page.url().includes("chat.z.ai")) {
+      await page.goto("https://chat.z.ai/", { waitUntil: "domcontentloaded", timeout: 120000 });
     }
 
-    const { conversationId, message, model } = params;
-    const assistantId = ASSISTANT_ID_MAP[model] ?? DEFAULT_ASSISTANT_ID;
+    // Track assistant blocks before sending the message.
+    const beforeCount = await page.locator(".chat-assistant").count();
 
-    console.log(`[GLM Intl Web Browser] Sending request... model=${model} assistantId=${assistantId}`);
-    console.log(`[GLM Intl Web Browser Debug] Full request details:`);
-    console.log(`  - Model: ${model}`);
-    console.log(`  - Assistant ID: ${assistantId}`);
-    console.log(`  - Conversation ID: ${conversationId || 'new'}`);
-    console.log(`  - Message length: ${message.length}`);
-    console.log(`  - Access token present: ${!!this.accessToken}`);
+    // Prefer textarea composer used by chat.z.ai.
+    let sent = false;
+    const textarea = page.locator("textarea").first();
+    if ((await textarea.count()) > 0) {
+      await textarea.click({ timeout: 5000 });
+      await textarea.fill(params.message);
+      await textarea.press("Enter");
+      sent = true;
+    }
 
-    const fetchTimeoutMs = 120_000;
-    const sign = generateSign();
-    const requestId = crypto.randomUUID().replace(/-/g, "");
-
-    // Try OpenAI-compatible format for international version
-    // Keep original format as fallback for chatglm.cn endpoints
-    let body;
-    const useOpenAIFormat = false; // Try original format first
-
-    if (useOpenAIFormat) {
-      console.log(`[GLM Intl Web Browser] Using OpenAI-compatible request format`);
-      body = {
-        model: model,
-        messages: [
-          {
-            role: "user",
-            content: message,
-          },
-        ],
-        stream: true,
-      };
-
-      // Add conversation_id if available (some GLM APIs might need it)
-      if (conversationId) {
-        body.conversation_id = conversationId;
+    // Fallback for contenteditable composers.
+    if (!sent) {
+      const editable = page.locator('[contenteditable="true"]').first();
+      if ((await editable.count()) > 0) {
+        await editable.click({ timeout: 5000 });
+        await page.keyboard.type(params.message, { delay: 5 });
+        await page.keyboard.press("Enter");
+        sent = true;
       }
-    } else {
-      // Original chatglm.cn format
-      body = {
-        assistant_id: assistantId,
-        conversation_id: conversationId || "",
-        project_id: "",
-        chat_type: "user_chat",
-        meta_data: {
-          cogview: { rm_label_watermark: false },
-          is_test: false,
-          input_question_type: "xxxx",
-          channel: "",
-          draft_id: "",
-          chat_mode: "zero",
-          is_networking: false,
-          quote_log_id: "",
-          platform: "pc",
-        },
-        messages: [
-          {
-            role: "user",
-            content: [{ type: "text", text: message }],
-          },
-        ],
-      };
     }
 
-    const evalPromise = this.page.evaluate(
-      async ({ accessToken, bodyStr, deviceId, requestId, timeoutMs, sign, xExpGroups }) => {
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          console.log('[GLM Intl Web Browser - Page Context] Starting API request');
-          console.log('[GLM Intl Web Browser - Page Context] Access token present:', !!accessToken);
-          console.log('[GLM Intl Web Browser - Page Context] Request body length:', bodyStr.length);
-          console.log('[GLM Intl Web Browser - Page Context] Request body preview:', bodyStr.substring(0, 500));
-
-          const controller = new AbortController();
-          timer = setTimeout(() => controller.abort(), timeoutMs);
-
-          const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-            "Accept": "text/event-stream",
-            "App-Name": "chatglm",
-            "Origin": "https://chat.z.ai",
-            "X-App-Platform": "pc",
-            "X-App-Version": "1.0.0",
-            "X-App-fr": "default",
-            "X-Device-Brand": "",
-            "X-Device-Id": deviceId,
-            "X-Device-Model": "",
-            "X-Exp-Groups": xExpGroups,
-            "X-FE-Version": "prod-fe-1.0.250",
-            "X-Lang": "zh",
-            "X-Nonce": sign.nonce,
-            "X-Request-Id": requestId,
-            "X-Sign": sign.sign,
-            "X-Timestamp": sign.timestamp,
-          };
-          if (accessToken) {
-            headers["Authorization"] = `Bearer ${accessToken}`;
-          }
-
-          console.log('[GLM Intl Web Browser - Page Context] Request headers:', JSON.stringify(headers, null, 2));
-
-          // Try different API endpoints for international version
-          // Try relative paths first - they might be intercepted by the app's request handlers
-          const apiEndpoints = [
-            "/api/v2/chat/completions",
-            "/api/v1/chat/completions",
-            "/v1/chat/completions",
-            "/api/chat/completions",
-            "/chat/completions",
-            // New endpoints for international version
-            "/api/chat/stream",
-            "/chat/stream",
-            "/api/conversation",
-            "/api/chat",
-            "/api/v1/chat",
-            "/api/v2/chat",
-            "/v1/chat",
-            "/v2/chat",
-            // Full URLs as fallback
-            "https://chat.z.ai/api/v2/chat/completions",
-            "https://chat.z.ai/api/v1/chat/completions",
-            "https://chat.z.ai/v1/chat/completions",
-            "https://chat.z.ai/api/chat/completions",
-            "https://chat.z.ai/chat/completions",
-            // Original chatglm.cn style endpoints
-            "https://chat.z.ai/chatglm/backend-api/assistant/stream",
-            "https://chat.z.ai/backend-api/assistant/stream",
-            "https://chat.z.ai/api/assistant/stream",
-            "https://chat.z.ai/chatglm/assistant/stream",
-            // Alternative paths
-            "https://chat.z.ai/api/chat/stream",
-            "https://chat.z.ai/chat/stream",
-            // New full URL endpoints
-            "https://chat.z.ai/api/conversation",
-            "https://chat.z.ai/api/chat",
-            "https://chat.z.ai/api/v1/chat",
-            "https://chat.z.ai/api/v2/chat",
-            "https://chat.z.ai/v1/chat",
-            "https://chat.z.ai/v2/chat",
-            // Try WebSocket-like endpoints (though fetch may not work)
-            "https://chat.z.ai/ws/chat",
-            "https://chat.z.ai/ws",
-          ];
-
-          let res: Response | null = null;
-          let lastError = "";
-
-          for (const endpoint of apiEndpoints) {
-            try {
-              console.log(`[GLM Intl Web Browser Debug] Trying endpoint: ${endpoint}`);
-              res = await fetch(
-                endpoint,
-                {
-                  method: "POST",
-                  headers,
-                  credentials: "include",
-                  body: bodyStr,
-                  signal: controller.signal,
-                },
-              );
-
-              if (res.ok) {
-                console.log(`[GLM Intl Web Browser Debug] Success with endpoint: ${endpoint}`);
-                break;
-              }
-
-              // 读取错误响应体
-              let errorBody = '';
-              try {
-                errorBody = await res.text();
-                console.log(`[GLM Intl Web Browser Debug] Endpoint ${endpoint} error response: ${errorBody.substring(0, 1000)}`);
-              } catch (err) {
-                console.log(`[GLM Intl Web Browser Debug] Could not read error response body: ${err}`);
-              }
-
-              if (res.status !== 404 && res.status !== 405) {
-                // If it's not a 404/405, we might have the right endpoint but wrong params
-                console.log(`[GLM Intl Web Browser Debug] Endpoint ${endpoint} returned status: ${res.status}`);
-                // 返回详细的错误信息
-                return {
-                  ok: false,
-                  status: res.status,
-                  error: `Endpoint ${endpoint} failed with status ${res.status}: ${errorBody.substring(0, 500)}`,
-                  endpoint: endpoint,
-                  errorBody: errorBody.substring(0, 2000)
-                };
-              }
-
-              lastError = `Endpoint ${endpoint}: ${res.status} - ${errorBody.substring(0, 200)}`;
-              console.log(`[GLM Intl Web Browser Debug] Endpoint ${endpoint} failed with status: ${res.status}, error: ${errorBody.substring(0, 200)}`);
-            } catch (err) {
-              console.log(`[GLM Intl Web Browser Debug] Endpoint ${endpoint} error: ${err}`);
-              lastError = `Endpoint ${endpoint}: ${err}`;
-            }
-          }
-
-          if (!res) {
-            console.log(`[GLM Intl Web Browser Debug] All endpoints failed. Last error: ${lastError}`);
-            console.log(`[GLM Intl Web Browser Debug] Tried endpoints: ${apiEndpoints.join(', ')}`);
-            return {
-              ok: false,
-              status: 500,
-              error: `All API endpoints failed. Last error: ${lastError}`,
-              endpointsTried: apiEndpoints,
-              lastError: lastError
-            };
-          }
-
-          clearTimeout(timer);
-
-          if (!res.ok) {
-            const errorText = await res.text();
-            console.log(`[GLM Intl Web Browser Debug] API response status: ${res.status}, error: ${errorText.substring(0, 1000)}`);
-            return { ok: false, status: res.status, error: errorText.substring(0, 2000) };
-          }
-
-          const reader = res.body?.getReader();
-          if (!reader) {
-            return { ok: false, status: 500, error: "No response body" };
-          }
-
-          const decoder = new TextDecoder();
-          let fullText = "";
-          let chunkCount = 0;
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            fullText += chunk;
-            chunkCount++;
-          }
-
-          return { ok: true, data: fullText, chunkCount };
-        } catch (err) {
-          if (timer) clearTimeout(timer);
-          const msg = String(err);
-          if (msg.includes("aborted") || msg.includes("signal")) {
-            return { ok: false, status: 408, error: `ChatGLM API request timed out after ${timeoutMs}ms` };
-          }
-          return { ok: false, status: 500, error: msg };
+    // Last fallback: plain text input + send button.
+    if (!sent) {
+      const input = page.locator('input[type="text"]').first();
+      if ((await input.count()) > 0) {
+        await input.click({ timeout: 5000 });
+        await input.fill(params.message);
+        const sendBtn = page
+          .locator('button.sendMessageButton, button[aria-label*="Send"], button:has-text("发送")')
+          .first();
+        if ((await sendBtn.count()) > 0) {
+          await sendBtn.click();
+          sent = true;
+        } else {
+          await input.press("Enter");
+          sent = true;
         }
-      },
-      {
-        accessToken: this.accessToken,
-        bodyStr: JSON.stringify(body),
-        deviceId: this.deviceId,
-        requestId,
-        timeoutMs: fetchTimeoutMs,
-        sign,
-        xExpGroups: X_EXP_GROUPS,
-      },
-    );
-
-    const externalTimeoutMs = fetchTimeoutMs + 10_000;
-    const responseData = await Promise.race([
-      evalPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(
-          () => reject(new Error(`[GLM Intl Web Browser] page.evaluate timed out after ${externalTimeoutMs / 1000}s`)),
-          externalTimeoutMs,
-        ),
-      ),
-    ]);
-
-    if (!responseData || !responseData.ok) {
-      if (responseData?.status === 401) {
-        console.log("[GLM Intl Web Browser] Access token expired, refreshing...");
-        await this.refreshAccessToken();
-        throw new Error("Authentication expired. Token has been refreshed, please retry.");
       }
-
-      // Provide detailed debugging information for 405 errors
-      let errorMsg = `ChatGLM API error: ${responseData?.status || "unknown"} - ${responseData?.error || "Request failed"}`;
-
-      if (responseData?.status === 405) {
-        errorMsg += `
-
-GLM International (chat.z.ai) API Configuration Help:
-------------------------------------------------------------------------
-The GLM International version appears to use a different API structure than the Chinese version (chatglm.cn).
-
-To fix this issue, please follow these steps:
-
-1. Open https://chat.z.ai in Chrome browser and log in
-2. Press F12 to open Developer Tools
-3. Go to the "Network" tab
-4. Clear existing network logs (click 🚫 icon)
-5. Send a message in the chat interface
-6. Look for API requests in the Network tab (filter by "stream" or "assistant")
-7. Find the correct API endpoint URL (should be a POST request)
-8. Find the correct request headers (especially X-Sign, X-Nonce, X-Timestamp)
-9. Find the correct request body format
-
-Common API endpoint patterns for chat.z.ai:
-- https://chat.z.ai/api/v1/chat/completions (OpenAI compatible)
-- https://chat.z.ai/chat/api/stream
-- https://chat.z.ai/backend-api/conversation
-
-Please provide the correct API endpoint and headers so we can update the implementation.
-
-Debug information:
-- Model: ${model}
-- Assistant ID: ${assistantId}
-- Access token: ${this.accessToken ? 'Present' : 'Missing'}
-- Tried ${apiEndpoints.length} different API endpoints
-------------------------------------------------------------------------
-`;
-      }
-
-      // Log detailed error information for debugging
-      console.log(`[GLM Intl Web Browser] Detailed error:`, JSON.stringify(responseData, null, 2));
-
-      throw new Error(errorMsg);
     }
 
-    console.log(`[GLM Intl Web Browser] Response: ${responseData.chunkCount} chunks, ${responseData.data?.length || 0} bytes`);
-    if (responseData.data && responseData.data.length > 0) {
-      console.log(`[GLM Intl Web Browser] Response preview (first 500 chars): ${responseData.data.substring(0, 500)}`);
+    if (!sent) {
+      throw new Error("GLM Intl UI send failed: no chat input found.");
     }
 
+    // Wait for a new assistant message node to appear.
+    await page
+      .waitForFunction(
+        (prev) => document.querySelectorAll(".chat-assistant").length > prev,
+        beforeCount,
+        { timeout: 120000, polling: 500 },
+      )
+      .catch(() => {});
+
+    // Poll the latest assistant message text until it stabilizes.
+    const deadline = Date.now() + 120000;
+    let stableRounds = 0;
+    let lastText = "";
+    while (Date.now() < deadline) {
+      const text = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll(".chat-assistant"));
+        const latest = nodes[nodes.length - 1];
+        return (latest?.innerText ?? "").trim();
+      });
+
+      if (text && text === lastText) {
+        stableRounds += 1;
+      } else {
+        stableRounds = 0;
+        lastText = text;
+      }
+
+      // Consider the response complete after ~3 stable polls.
+      if (lastText && stableRounds >= 3) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 900));
+    }
+
+    if (!lastText) {
+      throw new Error("GLM Intl UI reply capture failed: assistant message not found.");
+    }
+
+    // Keep stream parser compatibility by returning SSE-like data lines.
+    const payload = `data: ${JSON.stringify({ text: lastText })}\n\n`;
     const encoder = new TextEncoder();
     return new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode(responseData.data));
+        controller.enqueue(encoder.encode(payload));
         controller.close();
       },
     });

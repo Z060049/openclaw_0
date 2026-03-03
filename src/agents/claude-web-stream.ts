@@ -426,17 +426,29 @@ export function createClaudeWebStreamFn(cookieOrJson: string): StreamFn {
           try {
             const data = JSON.parse(dataStr);
 
-            // Extract conversation ID
-            if (data.sessionId || data.sessionId) {
-              sessionMap.set(sessionKey, data.sessionId || data.sessionId);
+            // Extract conversation ID (if present)
+            if (data.sessionId) {
+              sessionMap.set(sessionKey, data.sessionId);
             }
 
-            // Extract content delta - Qwen v2 uses choices[0].delta.content
-            const delta =
+            // Unified delta extraction:
+            // - Qwen-style: choices[0].delta.content / text / content / delta
+            // - Claude Web SSE: type === "content_block_delta" with delta.text
+            let delta: unknown =
               data.choices?.[0]?.delta?.content ??
               data.text ??
               data.content ??
               data.delta;
+
+            if (
+              (!delta || typeof delta !== "string") &&
+              data.type === "content_block_delta" &&
+              data.delta &&
+              typeof data.delta.text === "string"
+            ) {
+              delta = data.delta.text;
+            }
+
             if (typeof delta === "string" && delta) {
               pushDelta(delta);
             }

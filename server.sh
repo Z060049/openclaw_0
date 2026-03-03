@@ -3,7 +3,7 @@
 # 兼容 macOS / Linux (含 Deepin) / Windows (Git Bash / WSL)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-STATE_DIR="$SCRIPT_DIR/.openclaw-state"
+STATE_DIR="$SCRIPT_DIR/.openclaw-zero-state"
 CONFIG_FILE="$STATE_DIR/openclaw.json"
 PID_FILE="$SCRIPT_DIR/.gateway.pid"
 PORT=3001
@@ -69,15 +69,15 @@ open_browser() {
 # 临时日志路径（Windows 不一定有 /tmp）
 tmp_log() {
   if [ -d /tmp ]; then
-    echo "/tmp/openclaw-gateway.log"
+    echo "/tmp/openclaw-zero-gateway.log"
   else
-    echo "$SCRIPT_DIR/logs/openclaw-gateway.log"
+    echo "$SCRIPT_DIR/logs/openclaw-zero-gateway.log"
   fi
 }
 
 OS=$(detect_os)
 NODE=$(detect_node)
-LOG_FILE="$SCRIPT_DIR/logs/openclaw.log"
+LOG_FILE="$SCRIPT_DIR/logs/openclaw-zero.log"
 TMP_LOG=$(tmp_log)
 
 if [ -z "$NODE" ]; then
