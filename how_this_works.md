@@ -115,3 +115,71 @@ Typical files:
 Notes:
 - Sensitive auth/session material is local and should not be committed.
 - Browser local storage is not the primary system database for this project.
+
+## WhatsApp Stock Analysis Feature
+
+If you want to talk to OpenClaw through WhatsApp and ask it to draft stock analysis, this setup can do it.
+
+### Do You Need To Reinstall OpenClaw?
+
+Usually, no.
+
+You only need to reinstall/rebuild if:
+- You moved to a new machine.
+- Dependencies/build files are broken or missing.
+- A major upgrade requires a fresh install.
+
+In normal use, you just restart services and re-auth when sessions expire.
+
+### How To Use WhatsApp For Stock Analysis
+
+1. Start your normal runtime:
+
+```bash
+./start-chrome-debug.sh
+./onboard.sh
+./server.sh start
+```
+
+2. Link WhatsApp account:
+
+```bash
+openclaw channels login --channel whatsapp
+```
+
+Then scan the QR code in WhatsApp -> Linked Devices.
+
+3. Verify channel health:
+
+```bash
+openclaw channels status --probe
+```
+
+4. Confirm DM access policy:
+- Use `pairing` or `allowlist` for `channels.whatsapp.dmPolicy`.
+- If using `allowlist`, ensure your number is in `allowFrom`.
+
+5. Enable web research keys for stronger stock analysis:
+- `web_search` needs provider keys for real-time results.
+- Configure one of:
+  - `BRAVE_API_KEY`
+  - `PERPLEXITY_API_KEY` or `OPENROUTER_API_KEY`
+  - `XAI_API_KEY`
+
+6. Ask with a structured finance prompt in WhatsApp, for example:
+
+```text
+Draft a stock analysis for NVDA with:
+1) business summary
+2) moat
+3) growth drivers
+4) valuation comps
+5) top 5 risks
+6) bull/base/bear scenario table
+Use recent sources and cite links.
+Not financial advice.
+```
+
+### What You Have After Setup
+
+After setup, you have a local OpenClaw gateway running on your machine and can interact through WhatsApp (plus browser/API/CLI). It is not just a static browser page; it is a local service with multiple client entry points.
