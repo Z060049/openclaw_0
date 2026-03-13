@@ -207,6 +207,15 @@ Once core chat is stable:
 3. Ensure model is stable (currently use Kimi instead of ChatGPT Web).
 4. For live market data quality, configure web search provider keys as needed.
 
+## CLI Command Learning (Global vs Local)
+
+- `openclaw ...` only works if the OpenClaw CLI binary is installed globally and available in your shell `PATH`.
+- On this machine, `openclaw` can return `command not found`, which means global install/path is missing.
+- `node openclaw.mjs ...` works from repo root because it runs the local project launcher directly.
+- The local launcher (`openclaw.mjs`) imports `dist/index.mjs`, so it executes the same CLI logic without needing global install.
+- For reliability in this repo, use local form:
+  - `node openclaw.mjs configure --section web`
+
 ## Key Takeaways
 
 - Do not skip Node version check.
