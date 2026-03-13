@@ -18,7 +18,7 @@ todos:
     content: Link WhatsApp account and verify channel status
     status: cancelled
   - id: enable-research-tools
-    content: Set web_search API key provider for real-time research
+    content: Ensure browser tool is available for zero-token real estate research
     status: cancelled
   - id: run-stock-analysis-test
     content: Send structured real-estate prompt via WhatsApp and validate citations
@@ -72,40 +72,41 @@ Run `openclaw-zero-token` locally, verify chat works, enable web research, conne
 - In UI chat, run `/models` and confirm configured providers/models are listed.
 - Send a test message and confirm reply succeeds.
 
-## Step 7: Enable Web Research For Real Estate Analysis
+## Step 7: Enable Web Research For Real Estate Analysis (Zero-Token Path)
 
-- Configure one search provider key for `web_search`:
-  - `BRAVE_API_KEY`, or
-  - `PERPLEXITY_API_KEY` / `OPENROUTER_API_KEY`, or
-  - `XAI_API_KEY`
-- Tool behavior reference: [/Users/joeli/Desktop/files/github/openclaw-zero-token/src/agents/tools/web-search.ts](/Users/joeli/Desktop/files/github/openclaw-zero-token/src/agents/tools/web-search.ts)
+- **Primary path (no API keys):** Use the **browser** tool. The LLM (Kimi, DeepSeek, etc.) drives Chrome to visit sites, read pages, and synthesize answers. This is the core openclaw-zero-token flow.
+- Ensure debug Chrome is running (`./start-chrome-debug.sh`) so the agent can use the browser. No extra configuration required.
+- **Optional enhancement:** For one-shot “search the web and cite” behavior, configure one of: `BRAVE_API_KEY`, `PERPLEXITY_API_KEY` / `OPENROUTER_API_KEY`, or `XAI_API_KEY` (see `.env.example` and `src/agents/tools/web-search.ts`). Not required for real estate/stock research with the browser.
 
 ## Step 8: Run Web UI Real-Estate Analysis Test
 
-- Send a structured prompt in the Web UI chat:
+- In the Web UI at `http://127.0.0.1:3001/`, send a structured prompt:
   - "Draft a real estate analysis for Irvine, CA covering market trend, price/rent outlook, neighborhood-level drivers, risks, and bull/base/bear scenarios. Cite recent sources."
-- Confirm response quality and citations.
+- The agent may use the **browser** tool to visit sites (e.g. Zillow, local news) and synthesize an answer with sources.
+- Confirm response quality and that it references or cites what it found.
 
 ## Step 9: Link WhatsApp Channel
 
-- Run: `openclaw channels login --channel whatsapp`
-- Scan QR in WhatsApp -> Linked Devices.
-- Verify channel status with `openclaw channels status --probe`.
+- From repo root, run (this repo uses the local launcher; global `openclaw` may not be installed):
+  - `node openclaw.mjs channels login --channel whatsapp`
+- Scan the QR code in WhatsApp -> Linked Devices.
+- Verify channel status: `node openclaw.mjs channels status --probe`
 
 ## Step 10: Set WhatsApp Access Policy And Validate WhatsApp Prompt
 
-- Ensure DM access allows your sender:
-  - Preferred: `pairing` or `allowlist` mode.
-  - If `allowlist`, include your number in `allowFrom`.
-- Reference config shape: [/Users/joeli/Desktop/files/github/openclaw-zero-token/src/config/types.whatsapp.ts](/Users/joeli/Desktop/files/github/openclaw-zero-token/src/config/types.whatsapp.ts)
-- Send the same real-estate prompt in WhatsApp and confirm response + citations.
+- Ensure DM access allows your sender. In config (e.g. `.openclaw-zero-state/openclaw.json`):
+  - Prefer `channels.whatsapp.dmPolicy`: `pairing` or `allowlist`.
+  - If `allowlist`, add your number to `channels.whatsapp.allowFrom`.
+- Config shape reference: `src/config/types.whatsapp.ts`
+- Send the same real-estate prompt in WhatsApp; confirm the agent replies and references sources (e.g. from browser visits).
 
 ## Step 11: Daily Startup Routine
 
 - Use this sequence each day (or when sessions expire):
   - `./start-chrome-debug.sh`
-  - `./onboard.sh` (as needed)
+  - `./onboard.sh` (only if adding providers or re-auth)
   - `./server.sh start`
+- For CLI (e.g. WhatsApp channels, configure): from repo root run `node openclaw.mjs <subcommand>`
 
 ```mermaid
 flowchart LR
@@ -113,8 +114,8 @@ installBuild[InstallAndBuild] --> debugChrome[StartDebugChrome]
 debugChrome --> onboardProviders[RunOnboardAuth]
 onboardProviders --> startGateway[StartGatewayUI]
 startGateway --> validateModels[ValidateModelsAndChat]
-validateModels --> setSearchKeys[SetWebSearchKeys]
-setSearchKeys --> runWebUiPrompt[RunRealEstatePromptInWebUI]
+validateModels --> ensureBrowser[EnsureBrowserToolReady]
+ensureBrowser --> runWebUiPrompt[RunRealEstatePromptInWebUI]
 runWebUiPrompt --> linkWhatsApp[LinkWhatsAppQR]
 linkWhatsApp --> setDmPolicy[SetWhatsAppDmPolicy]
 setDmPolicy --> runWhatsAppPrompt[RunRealEstatePromptInWhatsApp]

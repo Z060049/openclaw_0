@@ -14,12 +14,13 @@ export async function loginWeb(
   accountId?: string,
 ) {
   const wait = waitForConnection ?? waitForWaConnection;
+  logInfo("Preparing WhatsApp Web connection…", runtime);
   const cfg = loadConfig();
   const account = resolveWhatsAppAccount({ cfg, accountId });
   const sock = await createWaSocket(true, verbose, {
     authDir: account.authDir,
   });
-  logInfo("Waiting for WhatsApp connection...", runtime);
+  logInfo("Waiting for QR scan… Scan the code below with your phone.", runtime);
   try {
     await wait(sock);
     console.log(success("✅ Linked! Credentials saved for future sends."));

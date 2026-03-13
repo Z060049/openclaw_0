@@ -328,6 +328,10 @@ export const whatsappOnboardingAdapter: ChannelOnboardingAdapter = {
     });
     if (wantsLink) {
       try {
+        await prompter.note(
+          "Starting WhatsApp Web login… A QR code will appear below in a moment. Scan it with your phone (WhatsApp → Linked Devices). Please wait—do not press Ctrl+C.",
+          "WhatsApp QR",
+        );
         await loginWeb(false, undefined, runtime, accountId);
       } catch (err) {
         runtime.error(`WhatsApp login failed: ${String(err)}`);

@@ -203,7 +203,7 @@ export function resolveMemorySlotDecision(params: {
   if (params.kind !== "memory") {
     return { enabled: true };
   }
-  if (params.slot === null) {
+  if (params.slot === null || params.slot?.toLowerCase() === "none") {
     return { enabled: false, reason: "memory slot disabled" };
   }
   if (typeof params.slot === "string") {

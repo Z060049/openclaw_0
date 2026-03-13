@@ -86,6 +86,10 @@ const resolvePluginSdkAccountIdAlias = (): string | null => {
   return resolvePluginSdkAliasFile({ srcFile: "account-id.ts", distFile: "account-id.js" });
 };
 
+const resolvePluginSdkCompatAlias = (): string | null => {
+  return resolvePluginSdkAliasFile({ srcFile: "compat.ts", distFile: "compat.js" });
+};
+
 function buildCacheKey(params: {
   workspaceDir?: string;
   plugins: NormalizedPluginsConfig;
@@ -396,15 +400,19 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     }
     const pluginSdkAlias = resolvePluginSdkAlias();
     const pluginSdkAccountIdAlias = resolvePluginSdkAccountIdAlias();
+    const pluginSdkCompatAlias = resolvePluginSdkCompatAlias();
     jitiLoader = createJiti(import.meta.url, {
       interopDefault: true,
       extensions: [".ts", ".tsx", ".mts", ".cts", ".mtsx", ".ctsx", ".js", ".mjs", ".cjs", ".json"],
-      ...(pluginSdkAlias || pluginSdkAccountIdAlias
+      ...(pluginSdkAlias || pluginSdkAccountIdAlias || pluginSdkCompatAlias
         ? {
             alias: {
               ...(pluginSdkAlias ? { "openclaw/plugin-sdk": pluginSdkAlias } : {}),
               ...(pluginSdkAccountIdAlias
                 ? { "openclaw/plugin-sdk/account-id": pluginSdkAccountIdAlias }
+                : {}),
+              ...(pluginSdkCompatAlias
+                ? { "openclaw/plugin-sdk/compat": pluginSdkCompatAlias }
                 : {}),
             },
           }
