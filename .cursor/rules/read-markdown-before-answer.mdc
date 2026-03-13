@@ -1,0 +1,15 @@
+---
+description: Require markdown-first, no-guess responses
+alwaysApply: true
+---
+
+# Markdown-First Responses
+
+Before giving guidance, read the project's Markdown documentation files and base responses on those docs.
+
+## Required behavior
+
+- Read Markdown files in the project before answering (`*.md`, including files under `md/` and root docs like `README.md`, `START_HERE.md`, `INSTALLATION.md`, `TEST_STEPS.md` when relevant).
+- Do not rely on guesses when docs/source can be checked.
+- If docs do not cover something clearly, say it is not documented and then suggest a cautious next step.
+- Prefer doc-backed commands and mention when a command comes from documentation vs source inspection.

@@ -1,0 +1,22 @@
+---
+description: Require Chrome debug mode before starting OpenClaw server
+alwaysApply: true
+---
+
+# Chrome Debug Mode Requirement
+
+Before starting the OpenClaw gateway server, ensure Chrome is running in debug mode.
+
+## Required Command
+
+```bash
+./start-chrome-debug.sh
+```
+
+## Startup Order
+
+1. Run `./start-chrome-debug.sh`
+2. Run onboarding/auth flow as needed (`./onboard.sh`)
+3. Start gateway (`./server.sh start`)
+
+If server/chat browser providers fail, first verify debug Chrome is active on `http://127.0.0.1:9222`.
