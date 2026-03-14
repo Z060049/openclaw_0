@@ -407,13 +407,13 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       ...(pluginSdkAlias || pluginSdkAccountIdAlias || pluginSdkCompatAlias
         ? {
             alias: {
-              ...(pluginSdkAlias ? { "openclaw/plugin-sdk": pluginSdkAlias } : {}),
               ...(pluginSdkAccountIdAlias
                 ? { "openclaw/plugin-sdk/account-id": pluginSdkAccountIdAlias }
                 : {}),
               ...(pluginSdkCompatAlias
                 ? { "openclaw/plugin-sdk/compat": pluginSdkCompatAlias }
                 : {}),
+              ...(pluginSdkAlias ? { "openclaw/plugin-sdk": pluginSdkAlias } : {}),
             },
           }
         : {}),

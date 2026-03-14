@@ -142,7 +142,7 @@ start_gateway() {
   echo "端口: $PORT"
   echo ""
 
-  nohup "$NODE" "$SCRIPT_DIR/dist/index.mjs" gateway --port "$PORT" > "$TMP_LOG" 2>&1 &
+  nohup "$NODE" "$SCRIPT_DIR/dist/index.mjs" gateway run --port "$PORT" > "$TMP_LOG" 2>&1 &
   GATEWAY_PID=$!
   echo "$GATEWAY_PID" > "$PID_FILE"
 
